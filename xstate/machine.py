@@ -3,6 +3,7 @@ from xstate.state_node import StateNode
 from xstate.state import State
 from xstate.algorithm import enter_states, get_state_value, main_event_loop
 from xstate.event import Event
+from xstate.assign import Assigner
 
 
 class Machine:
@@ -10,24 +11,27 @@ class Machine:
     _id_map: Dict[str, StateNode]
     actions: [lambda: None]
 
-    def __init__(self, config, actions={}):
+    def __init__(self, config, actions={}, guards= {}):
         self.id = config["id"]
+        self.initial_context = config["context"] if("context" in config.keys()) else {}
         self._id_map = {}
         self.root = StateNode(
             config, machine=self, key=config.get("id", "(machine)"), parent=None
         )
         self.states = self.root.states
         self.actions = actions
+        
+        self.guards = guards
 
     def transition(self, state: State, event: str):
         (configuration, _actions) = main_event_loop(self, state, Event(event))
 
         value = get_state_value(self.root, configuration=configuration)
-        
         actions, warnings = self._get_actions(_actions)
         for w in warnings: print(w)
         
-        return State(configuration=configuration, context={}, actions=actions)
+        context = self.executeTransitionActions(value, state.context)
+        return State(configuration=configuration, context=context, actions=actions)
 
     def _get_actions(self, actions) -> [lambda: None]:
         result = []
@@ -35,12 +39,29 @@ class Machine:
         for action in actions:
             if action.type in self.actions:
                 result.append(self.actions[action.type])
-            elif callable(action.type):
-                result.append(action.type)
             else:
                 errors.append("No '{}' action".format(action.type)) 
         return result, errors
-
+    
+    def executeTransitionActions(self, state, context):
+        _state = None
+        _context = dict(context) if context else {}
+        
+        if(type(state) == dict):
+            _state = self
+            for s in [*state.keys()][0].split("."):
+                _state = _state.states[s]
+        else:
+            _state = self.states[state]
+        
+        transitionActions = _state.transitions[0].actions
+        for action in transitionActions:
+            for key in Assigner.actions[action.type]:
+                value = Assigner.actions[action.type][key](context)
+                _context[key] = value
+        
+        return _context
+        
     def state_from(self, state_value) -> State:
         configuration = self._get_configuration(state_value=state_value)
 
@@ -88,7 +109,9 @@ class Machine:
             internal_queue=[],
         )
         
+        state = self.root.initial.target[0].id.split(".")[-1]
+        context = self.executeTransitionActions(state, self.initial_context)
         actions, warnings = self._get_actions(_actions)
         for w in warnings: print(w)
         
-        return State(configuration=configuration, context={}, actions=actions)
+        return State(configuration=configuration, context=context, actions=actions)

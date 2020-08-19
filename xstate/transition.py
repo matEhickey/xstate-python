@@ -36,6 +36,7 @@ class Transition:
         if isinstance(self.config, str):
             return [self.source._get_relative(self.config)]
         elif isinstance(self.config, dict):
-            return [self.source._get_relative(v) for v in self.config["target"]]
+            return [self.source._get_relative(self.config["target"])]
+            # return [self.source._get_relative(v) for v in self.config["target"]]
         else:
             return [self.config]
