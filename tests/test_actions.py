@@ -2,33 +2,32 @@ from xstate.machine import Machine
 from xstate.state import State
 from unittest.mock import Mock
 
+def test_action():
+    entry_mock = Mock()
+    exit_mock = Mock()
 
-entry_mock = Mock()
-exit_mock = Mock()
-
-machine = Machine(
-    {
-        "id": "machine",
-        "initial": "on",
-        "states": {
-            "on" : {
-                "on": {"TOGGLE": "off"},
-                "entry": [{"type": "entry_action"}],
-                "exit": [{"type": "exit_action"}]
+    machine = Machine(
+        {
+            "id": "machine",
+            "initial": "on",
+            "states": {
+                "on" : {
+                    "on": {"TOGGLE": "off"},
+                    "entry": [{"type": "entry_action"}],
+                    "exit": [{"type": "exit_action"}]
+                },
+                "off": {
+                    "on": {"TOGGLE": "on"}
+                }
             },
-            "off": {
-                "on": {"TOGGLE": "on"}
-            }
         },
-    },
-    actions = {
-        "entry_action": entry_mock,
-        "exit_action": exit_mock,
-    }
-)
+        actions = {
+            "entry_action": entry_mock,
+            "exit_action": exit_mock,
+        }
+    )
 
 
-def test_context():
     state = machine.initial_state
     assert state.value is "on"
     
@@ -53,3 +52,33 @@ def test_context():
     assert exit_mock.call_count is 1
     
     
+def test_action_inline():
+    mock = Mock()
+
+    machine = Machine(
+        {
+            "id": "machine",
+            "initial": "on",
+            "states": {
+                "on" : {
+                    "on": {"TOGGLE": "off"},
+                    "entry": [
+                        lambda: mock()
+                    ]
+                },
+                "off": {
+                    "on": {"TOGGLE": "on"}
+                }
+            },
+        }
+    )
+
+
+    state = machine.initial_state
+    assert state.value is "on"
+    
+    for action in state.actions:
+        action()
+    
+    mock.assert_called_with()
+    assert mock.call_count is 1
