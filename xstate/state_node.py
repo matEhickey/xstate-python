@@ -44,13 +44,13 @@ class StateNode:
             else config.get("id", machine.id + "." + key)
         )
         self.entry = (
-            [self.get_entries(entry_action) for entry_action in config.get("entry")]
+            [self.get_entries(action) for action in config.get("entry")]
             if config.get("entry")
             else []
         )
 
         self.exit = (
-            [Action(exit_action.get("type")) for exit_action in config.get("exit")]
+            [self.get_entries(action) for action in config.get("exit")]
             if config.get("exit")
             else []
         )

@@ -4,7 +4,7 @@ from xstate.state import State
 from xstate.algorithm import enter_states, get_state_value, main_event_loop
 from xstate.event import Event
 from xstate.assign import Assigner
-
+import itertools
 
 class Machine:
     root: StateNode
@@ -28,9 +28,11 @@ class Machine:
 
         value = get_state_value(self.root, configuration=configuration)
         actions, warnings = self._get_actions(_actions)
-        for w in warnings: print(w)
+        context, errors = self.executeTransitionActions(value, state.context)
         
-        context = self.executeTransitionActions(value, state.context)
+        for w in warnings: print(w)
+        for e in errors: print(e)
+        
         return State(configuration=configuration, context=context, actions=actions)
 
     def _get_actions(self, actions) -> [lambda: None]:
@@ -41,10 +43,12 @@ class Machine:
                 result.append(self.actions[action.type])
             else:
                 errors.append("No '{}' action".format(action.type)) 
+        import pdb; pdb.set_trace()
         return result, errors
     
     def executeTransitionActions(self, state, context):
         _state = None
+        errors = []
         _context = dict(context) if context else {}
         
         if(type(state) == dict):
@@ -54,13 +58,18 @@ class Machine:
         else:
             _state = self.states[state]
         
-        transitionActions = _state.transitions[0].actions
-        for action in transitionActions:
-            for key in Assigner.actions[action.type]:
-                value = Assigner.actions[action.type][key](context)
-                _context[key] = value
+
+        transitionActions = [*itertools.chain(*map(lambda x: x.actions, _state.transitions))]
         
-        return _context
+        for action in transitionActions:
+            if action.type in Assigner.actions:
+                for key in Assigner.actions[action.type]:
+                    value = Assigner.actions[action.type][key](context)
+                    _context[key] = value
+            else:
+                errors.append("No '{}' action".format(action.type)) 
+        
+        return _context, errors
         
     def state_from(self, state_value) -> State:
         configuration = self._get_configuration(state_value=state_value)
@@ -110,8 +119,11 @@ class Machine:
         )
         
         state = self.root.initial.target[0].id.split(".")[-1]
-        context = self.executeTransitionActions(state, self.initial_context)
+        
+        context, errors = self.executeTransitionActions(state, self.initial_context)
         actions, warnings = self._get_actions(_actions)
+        
+        for e in errors: print(e)
         for w in warnings: print(w)
         
         return State(configuration=configuration, context=context, actions=actions)
